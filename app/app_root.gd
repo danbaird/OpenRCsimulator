@@ -975,9 +975,10 @@ func open_controls(from: Control = null) -> void:
 
 func _update_controller_calibration_button(setup: Node) -> void:
 	var device: Dictionary = controllers.registry.device_for_id(setup.selected_flight_device_id())
-	var available: bool = flight != null and bool(device.get("connected", false)) and setup.current_profile().get("kind", "") == "radio"
-	setup.calibrate_button.visible = available
-	setup.calibrate_button.disabled = not available
+	var is_radio: bool = bool(device.get("connected", false)) and setup.current_profile().get("kind", "") == "radio"
+	setup.calibrate_button.visible = is_radio
+	setup.calibrate_button.disabled = not is_radio or flight == null
+	setup.calibrate_button.tooltip_text = "" if flight != null else tr("Start a flight first, then open Controller Settings to calibrate.")
 
 
 func _controller_bindings(id: int, flight_context := false) -> Dictionary:

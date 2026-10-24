@@ -932,6 +932,7 @@ func _ready() -> void:
 	if _draft_profile.is_empty():
 		_load_profile_for_device(_draft_flight_device_id)
 	_update_profile_options()
+	_update_profile_kind_picker()
 	_update_axis_controls()
 	_update_aux_controls()
 	_update_action_controls()
@@ -1303,6 +1304,10 @@ func _update_profile_kind_picker() -> void:
 	if _profile_kind_help_label != null:
 		_profile_kind_help_label.visible = can_choose_kind
 		_profile_kind_help_label.text = tr("Choose the flight profile for this unknown controller. Gamepad starts in Mode 2; radio uses a custom profile. Calibration never starts automatically.")
+	if calibrate_button != null:
+		var is_radio := not device.is_empty() and str(_draft_profile.get("kind", "")) == "radio"
+		calibrate_button.visible = is_radio
+		calibrate_button.disabled = not is_radio
 	if not can_choose_kind:
 		return
 	profile_kind_picker.clear()

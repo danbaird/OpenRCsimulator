@@ -150,6 +150,24 @@ func _initialize() -> void:
 	var recovered := rollback_store.load_all()
 	check("valid rollback copy recovers unreadable primary", recovered.ok and recovered.get("recovered_from_backup", false) and recovered.profiles.size() == 1)
 
+	# Real radio calibration captures float32 joystick endpoints (e.g. -32766/32768). ConfigFile writes
+	# those with float32 precision, so the write-verify round trip must compare the stored form.
+	var float32_path := "user://controller_core_float32_test.cfg"
+	_clean(float32_path)
+	var float32_store := Store.new(float32_path, LEGACY_PATH)
+	var calibrated: Dictionary = Profile.defaults("radio", "radio_custom")
+	calibrated.throttle.min = float(-32766.0 / 32768.0)
+	calibrated.throttle.center = float(-32766.0 / 32768.0)
+	calibrated.throttle.max = float(32761.0 / 32768.0)
+	calibrated.roll.min = float(-32111.0 / 32768.0)
+	calibrated.roll.center = float(123.0 / 32768.0)
+	calibrated.roll.max = float(32700.0 / 32768.0)
+	var float32_saved := float32_store.save_profile(calibrated)
+	check("float32 calibration endpoints save", float32_saved.ok, str(float32_saved.get("error", "")))
+	check("saved calibration profile equals what reloads", float32_saved.ok and float32_store.load_all().profiles[0] == float32_saved.profile)
+	check("re-saving a stored calibration is idempotent", float32_saved.ok and float32_store.save_profile(float32_saved.profile).ok)
+	_clean(float32_path)
+
 	for path in [PROFILE_PATH, CORRUPT_PATH, LEGACY_PATH, "user://controller_core_import_not_saved.cfg", "user://controller_core_match_test.cfg", "user://controller_core_rollback_test.cfg", "user://controller_core_strong_match_test.cfg"]:
 		_clean(path)
 	print("Controller profile store: %d checks, %d failed" % [checks, failures])

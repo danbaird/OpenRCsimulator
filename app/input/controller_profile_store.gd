@@ -47,7 +47,13 @@ func save_profile(candidate: Variant) -> Dictionary:
 	if not loaded.ok:
 		return {"ok": false, "profile": {}, "error": "Existing controller profile storage is unreadable: " + "; ".join(loaded.errors)}
 	var profiles: Array = loaded.profiles.duplicate(true)
-	var saved_profile: Dictionary = candidate.duplicate(true)
+	# Store exactly what the text file will read back. Raw joystick endpoints are
+	# float32 values (e.g. -0.99993896484375) that ConfigFile writes with float32
+	# precision, so an unmodified candidate never compares equal after the
+	# write-verify round trip and every calibrated save was rejected.
+	var saved_profile: Dictionary = _storage_canonical(candidate)
+	if not ControllerProfile.validate(saved_profile).ok:
+		return {"ok": false, "profile": {}, "error": "Invalid controller profile after storage normalization."}
 	var found := false
 	for index in profiles.size():
 		if profiles[index].profile_id == saved_profile.profile_id:
@@ -67,7 +73,7 @@ func save_profile(candidate: Variant) -> Dictionary:
 func restore_snapshot(snapshot: Dictionary) -> Dictionary:
 	if not bool(snapshot.get("ok", false)) or typeof(snapshot.get("profiles")) != TYPE_ARRAY:
 		return {"ok": false, "error": "The previous controller profile snapshot is invalid."}
-	var profiles: Array = snapshot.profiles.duplicate(true)
+	var profiles: Array = _storage_canonical(snapshot.profiles.duplicate(true))
 	var identifiers: Dictionary = {}
 	for candidate in profiles:
 		var validation := ControllerProfile.validate(candidate)
@@ -199,6 +205,11 @@ func _read_file(target_path: String) -> Dictionary:
 		identifiers[profile_id] = true
 		profiles.append(candidate.duplicate(true))
 	return {"ok": true, "missing": false, "profiles": profiles, "error": ""}
+
+
+## Returns the value as ConfigFile will read it back, so write verification compares like with like.
+static func _storage_canonical(value: Variant) -> Variant:
+	return str_to_var(var_to_str(value))
 
 
 func _write_transaction(profiles: Array, recovered_from_backup := false) -> Dictionary:

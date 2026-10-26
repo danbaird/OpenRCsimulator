@@ -54,6 +54,8 @@ var controller_recovery_button: Button
 var quit_button: Button
 var session_options_container: VBoxContainer
 var exit_options_container: VBoxContainer
+const ATTENTION_COLOR := Color(1.0, 0.42, 0.36)
+const ATTENTION_FONT_SIZE := 22
 var status_label: Label
 ## UI-34a: which aircraft and field this pause belongs to.
 var identity_label: Label
@@ -443,6 +445,8 @@ func _refresh_controller_recovery() -> void:
 func _refresh_controller_value() -> void:
 	controller_value_label.text = controller_value_text(_session)
 	controller_value_label.visible = not controller_value_label.text.is_empty()
+	_apply_attention_style(controller_value_label, throttle_blocks_resume(_session))
+	_apply_attention_style(status_label, status_needs_attention(_session))
 
 
 func controller_value_text(session: Node) -> String:
@@ -454,7 +458,39 @@ func controller_value_text(session: Node) -> String:
 		if pending != null and float(pending) >= 0.0:
 			value = float(pending)
 		return (tr("Collective on resume: %.0f%%") if collective_control else tr("Throttle on resume: %.0f%%")) % (value * 100.0)
-	return (tr("Current collective: %.0f%%") if collective_control else tr("Current throttle: %.0f%%")) % (value * 100.0)
+	var current := (tr("Current collective: %.0f%%") if collective_control else tr("Current throttle: %.0f%%")) % (value * 100.0)
+	if throttle_blocks_resume(session):
+		# Say exactly what Resume is waiting for, next to the number that is wrong.
+		var limit := float(session.radio.call("_idle_threshold")) * 100.0 if session.radio.has_method("_idle_threshold") else 5.0
+		current += "\n" + tr("Resume is blocked: lower it to %.0f%% or less.") % limit
+		current += "\n" + tr("Stick already at the bottom? The throttle mapping is wrong: Controls > Calibrate selected radio.")
+	return current
+
+
+## True when the only thing keeping Resume locked is a radio throttle above its arming limit.
+func throttle_blocks_resume(session: Node) -> bool:
+	if session == null or not bool(session.get("external_controller_selection")) or bool(session.get("_controller_lost")):
+		return false
+	return session.radio.connected and not session.radio.armed and not session.radio.is_gamepad() and not session.radio.is_rate_throttle()
+
+
+## Whether the status line reports a problem the pilot has to act on (shown as a warning, not plain text).
+func status_needs_attention(session: Node) -> bool:
+	if session == null:
+		return false
+	if controller_attention(session):
+		return true
+	var reason := str(session.get("pause_reason"))
+	return reason.begins_with("Calibration not saved: ") or reason.begins_with("radio calibrated, NOT saved")
+
+
+func _apply_attention_style(label: Label, attention: bool) -> void:
+	if attention:
+		label.add_theme_color_override("font_color", ATTENTION_COLOR)
+		label.add_theme_font_size_override("font_size", ATTENTION_FONT_SIZE)
+	else:
+		label.remove_theme_color_override("font_color")
+		label.remove_theme_font_size_override("font_size")
 
 
 func _on_joy_changed(_device: int, _connected: bool) -> void:
